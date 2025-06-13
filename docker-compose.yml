@@ -75,3 +75,20 @@ services:
       - 7359:7359/udp #optional
       - 1900:1900/udp #optional
     restart: unless-stopped
+
+  homepage:
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
+    environment:
+      HOMEPAGE_ALLOWED_HOSTS: pi.local:3000
+      PUID: 1000 # we need to use $PUID for docker sock access (root)
+      PGID: 1000 # we need to use $PGID for docker sock access (root)
+      HOMEPAGE_VAR_TRANSMISSION_USER: $USER_NAME
+      HOMEPAGE_VAR_TRANSMISSION_PASS: $USER_PASS
+    volumes:
+      - ./homepage-config:/app/config
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /media/usb:/data
+    ports:
+      - 3000:3000
+    restart: unless-stopped

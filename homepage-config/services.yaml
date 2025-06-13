@@ -1,0 +1,61 @@
+---
+# For configuration options and examples, please see:
+# https://gethomepage.dev/configs/services/
+
+- Media:
+    - Radarr:
+        group: Media
+        name: Radarr
+        icon: radarr.png
+        href: http://pi.local:7878
+        description: Movie Collection Manager
+        widget:
+            type: radarr
+            url: http://radarr:7878
+            key: 3a683b0cfeb34105a005c098e728a590
+
+    - Sonarr:
+        group: Media
+        name: Sonarr
+        icon: sonarr.png
+        href: http://pi.local:8989
+        description: TV Collection Manager
+        widget:
+            type: sonarr
+            url: http://sonarr:8989
+            key: 6fcdfa4da5854bb2ad6c1ede6f8311c2
+
+    - Jellyfin:
+        group: Media
+        name: Jellyfin
+        icon: jellyfin.png
+        href: http://pi.local:8096
+        description: Media Server & Streaming
+        widget:
+            type: jellyfin
+            url: http://jellyfin:8096
+            key: 29a662b951d844d9b898474d9f54dd8e
+
+- Downloads:
+    - Transmission:
+        group: Downloads
+        name: Transmission
+        icon: transmission.png
+        href: http://pi.local:9091
+        description: Torrent Client
+        widget:
+            type: transmission
+            url: http://transmission:9091
+            username: {{HOMEPAGE_VAR_TRANSMISSION_USER}}
+            password: {{HOMEPAGE_VAR_TRANSMISSION_PASS}}
+
+    - Prowlarr:
+        group: Downloads
+        name: Prowlarr
+        icon: prowlarr.png
+        href: http://pi.local:9696
+        description: Indexer Manager
+        widget:
+            type: prowlarr
+            url: http://prowlarr:9696
+            key: 652e678db9dc4bbba972b67a05dc7365

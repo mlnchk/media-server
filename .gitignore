@@ -1,3 +1,5 @@
 .env
 # Internal files used by services
 application-data/
+
+*.log

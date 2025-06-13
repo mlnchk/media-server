@@ -1,0 +1,26 @@
+---
+# System resource monitoring
+- resources:
+    # label: System
+    expanded: false
+    cpu: true
+    cputemp: true
+    tempmin: 0 # optional, minimum cpu temp
+    tempmax: 70 # optional, maximum cpu temp
+    units: metric # only used by cpu temp, options: 'imperial' or 'metric'
+    memory: true
+
+- resources:
+    # label: Storage
+    expanded: false
+    disk:
+      - /
+      - /data
+    diskUnits: bytes # optional, bytes (default) or bbytes. Only applies to disk
+
+- resources:
+    # label: Network
+    expanded: false
+    units: metric
+    refresh: 3000
+    network: true # optional, uses 'default' if true or specify a network interface name
