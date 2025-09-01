@@ -92,3 +92,18 @@ services:
     ports:
       - 3000:3000
     restart: unless-stopped
+
+  spotify:
+    image: giof71/librespot:latest
+    container_name: spotify
+    network_mode: host               # required for Spotify Connect discovery
+    restart: unless-stopped
+    environment:
+      - BACKEND=pulseaudio           # use host PulseAudio (to your BT speaker)
+      - DEVICE_NAME=Pi               # how it shows up in Spotify
+      - BITRATE=320                  # 96/160/320
+      - INITIAL_VOLUME=70
+      - PUID=1000                    # match your user (likely 'pi')
+      - PGID=1000
+    volumes:
+      - /run/user/1000/pulse:/run/user/1000/pulse  # PulseAudio socket from host
