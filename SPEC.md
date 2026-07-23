@@ -2,162 +2,197 @@
 
 ## Purpose
 
-Run a small, self-hosted media server with a manual Telegram workflow for finding and downloading movies. The system must remain understandable and low-maintenance: Docker Compose manages the services; there is no *arr stack, indexer service, watchlist sync, RSS polling, or automatic movie selection.
+Run a small, understandable media server for a single trusted household. The application supports manual torrent discovery, download monitoring, library management, media inspection/conversion, and Jellyfin refreshes through two clients: a web dashboard and a Telegram bot.
 
-## User workflow
+The design intentionally avoids an *arr stack, databases, provider frameworks, internal microservice APIs, and automatic content selection.
 
-1. The user sends a movie title to the Telegram bot.
-2. The bot searches RuTracker.
-3. The bot shows up to three eligible results with title, size, seeders, and leechers.
-4. The user presses a **Download** button or **Cancel**.
-5. For a download choice, the bot downloads the `.torrent` from RuTracker and adds it directly to Transmission.
-6. The bot confirms whether Transmission added it or identified it as an exact duplicate.
-7. Transmission downloads to the existing downloads directory. The existing manual dashboard workflow is used to inspect, convert DTS audio when needed, and move media to the Jellyfin library.
+## Design principles
 
-There is deliberately no persistent “already requested/downloaded” list. A user can search or request the same film again; Transmission will report an exact torrent duplicate when applicable.
+1. **One monolithic application process.** FastAPI serves the dashboard while aiogram Telegram polling runs as a background task in the same asyncio event loop.
+2. **Two thin clients, one set of capabilities.** Dashboard routes and Telegram handlers call the same Python service functions directly.
+3. **Capability-named boundaries.** Public modules describe what the application does, not which product currently implements it.
+4. **Concrete defaults over speculative abstraction.** RuTracker, Transmission, and Jellyfin are implemented directly behind stable module functions. Do not add protocols, dependency-injection containers, provider registries, or factories until a real second implementation requires them.
+5. **Manual first.** Operations that mutate files or start conversion require an explicit user action.
+6. **Single-user simplicity.** In-memory interaction and conversion state is acceptable. No database or distributed job queue is required.
 
-## Scope
+## Vocabulary
 
-### In scope
+- **Torrent indexer:** searches a torrent catalogue and retrieves torrent metadata/files. The current implementation is RuTracker.
+- **Download client:** adds and manages downloads. The current implementation is Transmission.
+- **Media server:** indexes and serves the organized media library. The current implementation is Jellyfin.
+- **Library:** the local Downloads, Movies, and Shows filesystem areas.
+- **Client:** a user interaction layer. The clients are the dashboard and Telegram bot; neither owns domain operations.
 
-- Telegram bot for manual title/link search and explicit download confirmation.
-- RuTracker as the only tracker.
-- Transmission as the only download client.
-- Existing dashboard retained as a browser UI for media management and torrent searching.
-- Shared Python service code used directly by dashboard and bot.
-- Manual DTS detection and DTS-to-AC3 conversion.
-- Repository cleanup and a root-level Python application layout.
+A BitTorrent tracker technically coordinates peers and is not necessarily a searchable catalogue. Therefore the searchable capability is called a **torrent indexer**, not a tracker service.
 
-### Out of scope
+## Target user capabilities
 
-- Letterboxd RSS, list synchronization, profile authorization, or polling.
-- Automatic search, selection, download, conversion, library moves, or deletion.
-- Radarr, Sonarr, Prowlarr, Homepage, Home Assistant, Glances, queues, and databases.
-- Additional torrent trackers.
-- An internal HTTP API between the bot and dashboard.
-- A Claude/dashboard integration. The service boundary should make one possible later, but no interface is built now.
+### Torrent discovery
 
-## Repository layout
+- Search RuTracker from either client using a title.
+- Fetch at most two result pages.
+- Exclude results over 30 GiB and obvious high-end formats such as 2160p, 4K, UHD, HDR, and Dolby Vision.
+- Prefer well-seeded 1080p/HD releases.
+- Present title, size, seeders, and leechers.
+- Require explicit confirmation before adding a torrent.
+- Let Transmission report exact duplicates; do not maintain a separate request database.
 
-```text
-media-server/
-├── docker-compose.yml
-├── Dockerfile
-├── pyproject.toml
-├── src/
-│   ├── services/
-│   │   ├── torrents.py
-│   │   ├── transmission.py
-│   │   └── media.py
-│   ├── dashboard/
-│   │   ├── main.py
-│   │   ├── routes.py
-│   │   └── templates/
-│   └── bot/
-│       ├── main.py
-│       └── handlers.py
-├── scripts/
-│   ├── check-and-notify.py
-│   └── convert-audio.py
-├── application-data/             # ignored runtime configuration/state
-├── .env                          # ignored secrets
-└── .env.example
-```
+### Download monitoring
 
-`scripts/` is reserved for operational entry points such as Transmission hooks or manual CLI commands. Application code must live under `src/` and must not depend on a script implementation.
+Both clients can list Transmission downloads with:
+
+- name and status;
+- downloaded and total bytes;
+- percentage complete;
+- remaining bytes;
+- current download rate;
+- approximate ETA when Transmission provides one, with `remaining / rate` as a possible fallback.
+
+Unknown or unavailable ETAs must be displayed as unknown rather than as misleading values.
+
+### Library management
+
+Both clients can:
+
+- browse files and directories in Downloads, Movies, and Shows;
+- move or rename files and directories between supported library areas;
+- reject path traversal and destination collisions;
+- inspect media audio tracks and clearly identify DTS.
+
+The first safe workflow should remain moving completed content from Downloads to Movies or Shows. Moving content belonging to an active torrent behind Transmission's back can break the download and must be rejected or deferred until a Transmission-aware move is deliberately implemented.
+
+All client selections use a library area plus a relative path. Arbitrary absolute paths are not accepted at the service boundary.
+
+### Audio conversion
+
+- Inspect streams with `ffprobe`.
+- Convert explicitly selected DTS tracks to AC3 while copying video and other streams.
+- Write to a temporary sibling file and replace the original only after successful `ffmpeg` completion.
+- Keep the original and remove incomplete output after failure or interruption.
+- Allow only one conversion at a time.
+
+Because dashboard and bot run in one process, they share conversion state. This depends on the application remaining a single Uvicorn worker.
+
+### Jellyfin refresh
+
+Both clients can explicitly request a Jellyfin library refresh. A successful request means Jellyfin accepted the scan request, not that scanning has completed.
+
+A failed refresh must not undo a successful filesystem move. Automatic refresh after a move may be added after the manual action is reliable.
 
 ## Architecture
 
-### Shared services
+```text
+                       one media application process
+                +---------------------------------------+
+                | FastAPI dashboard    Telegram polling |
+                |          \              /             |
+                |           Python service functions    |
+                +-------------+-----------+-------------+
+                              |           |
+                  local media filesystem  external applications
+                                           |- RuTracker
+                                           |- Transmission
+                                           `- Jellyfin
+```
 
-`services/torrents.py` owns the torrent workflow:
+There is no internal HTTP API between the bot and dashboard. Dashboard `/api/...` routes are web controllers used by its HTML/HTMX client; Telegram does not call them.
 
-- log in to RuTracker using credentials from environment variables;
-- search and download `.torrent` files;
-- normalize results;
-- apply eligibility filtering and ranking;
-- add a selected torrent through `TransmissionClient`.
+### Target layout
 
-`services/transmission.py` is a narrow Transmission RPC adapter. It handles RPC session negotiation and adds torrent metainfo. It has no Telegram, FastAPI, or RuTracker knowledge.
+```text
+src/
+├── app/
+│   └── main.py                 # Composition root and process lifecycle
+├── dashboard/
+│   ├── routes.py               # HTTP/HTML input and presentation only
+│   └── templates/
+├── bot/
+│   └── handlers.py             # Telegram input and presentation only
+└── services/
+    ├── torrent_indexer.py      # RuTracker-backed search and fetch
+    ├── download_client.py      # Transmission-backed add/status operations
+    ├── media_server.py         # Jellyfin-backed refresh operation
+    ├── library.py              # Safe filesystem browsing/moves
+    └── media.py                # ffprobe/ffmpeg inspection and conversion
+```
 
-`services/media.py` owns reusable media operations:
+Product-specific private helpers may live inside their capability modules, for example `_TransmissionRpcClient`. Separate `integrations/`, interface, and provider packages should only be introduced when their additional structure solves a real need.
 
-- enumerate video files;
-- inspect audio tracks with `ffprobe`;
-- detect DTS tracks;
-- convert selected DTS tracks to AC3 while copying video and subtitles.
+### Public service style
 
-### Interfaces
+Prefer small functions and provider-neutral data models:
 
-`dashboard/` is a FastAPI/HTML interface. `bot/` is an aiogram Telegram interface. They import the service functions directly and only handle input validation, presentation, and user interaction.
+```python
+search_torrents(query)
+fetch_torrent(reference)
+add_download(payload)
+list_downloads()
+list_library_items(area, path="")
+move_library_item(source, destination)
+get_audio_tracks(item)
+convert_audio(item, track_indices)
+refresh_libraries()
+```
 
-No service calls another container over HTTP. Both application containers are built from the same source image and differ only by their Compose command.
+Dashboard and bot import these functions. They should not construct or receive dependency graphs. Public errors and result models use capability terms such as `TorrentIndexerError`, `DownloadClientError`, and `MediaServerError`; provider details belong in logs.
 
-## Telegram bot requirements
+If a second implementation is actually introduced, preserve these public calls and select or combine implementations internally. Do not build that selection mechanism in advance.
+
+## Process lifecycle
+
+FastAPI is the primary process entry point. Its lifespan starts aiogram polling as a background task and stops it cleanly during shutdown.
+
+Requirements:
+
+- run exactly one Uvicorn worker;
+- do not use production reload mode, which can start duplicate bot pollers;
+- Telegram startup/polling failures should be logged and should not unnecessarily terminate the dashboard;
+- blocking `requests`, filesystem scans, and `ffprobe` operations must use `asyncio.to_thread` or otherwise avoid blocking the shared event loop;
+- long-running conversion uses an async subprocess.
+
+## Telegram behavior
 
 ### Access control
 
-- Only Telegram IDs listed in `ALLOWED_USER_IDS` may use the bot.
-- An empty allowlist is not permitted in the deployed configuration.
+- Only IDs in `ALLOWED_USER_IDS` may use the bot.
+- The deployed allowlist must not be empty.
 
-### Input
+### Interactions
 
-- Plain movie title: search that text.
-- URLs and empty text return a concise error.
+- Plain text continues to search the torrent indexer.
+- `/downloads` lists active and recent download status with refresh controls.
+- `/library` browses Downloads, Movies, and Shows and offers valid actions for the selected item.
+- Codec inspection shows all audio tracks and marks DTS tracks.
+- `/refresh` requests a Jellyfin library refresh.
+- Destructive or mutating actions such as move, rename, and conversion require confirmation.
 
-### Search result policy
+Telegram callback data has a small size limit. Store short-lived selection tokens in process memory instead of embedding full paths or result objects in callback payloads.
 
-- Fetch up to two RuTracker result pages.
-- Exclude files over 30 GiB.
-- Exclude titles containing obvious high-end formats: `2160p`, `4K`, `UHD`, `HDR`, `Dolby Vision` / `DV`.
-- Prefer 1080p/HD releases when otherwise comparable.
-- Rank primarily by seeders; use size preference only as a tie-breaker or small adjustment.
-- Return at most three results.
-- Show result title, size in GiB, seeders, and leechers, plus Download buttons and Cancel.
-- Do not claim that audio/subtitles are guaranteed: tracker titles are not reliable structured metadata.
-
-### Selection lifecycle
-
-- Pending choices are stored only in bot process memory.
-- Each result message has a unique token, so its buttons always refer to that message's results.
-- Up to ten recent searches per user remain valid until selected, cancelled, evicted by newer searches, or the bot restarts.
-- Downloading fetches the selected `.torrent` from RuTracker, sends it to Transmission, then reports its name and whether it was already present.
-- Cancel clears the pending choice.
+Up to ten recent torrent searches per user may remain valid until selected, cancelled, evicted, or the process restarts.
 
 ### Errors
 
-- Report no eligible results without exposing a traceback.
-- Report RuTracker login/CAPTCHA failures with an actionable message.
-- Report Transmission failures without falsely confirming a queued download.
-- Log complete errors in container logs.
+Return concise user-facing errors without tracebacks and log full details. Never report a torrent as added, a file as moved, a conversion as completed, or a refresh as requested before the underlying operation succeeds.
 
-## Media/DTS requirements
+## Deployment
 
-- DTS conversion remains manual; neither the bot nor Transmission starts conversion.
-- The dashboard may scan downloads, movies, and shows for DTS audio.
-- Conversion writes a temporary sibling output file.
-- Only after successful ffmpeg completion may it replace the original file.
-- Replacement retains the original file path/name, so library structure does not change.
-- Failed or interrupted conversion keeps the original and removes incomplete output.
-
-The existing post-download notification script may remain available, but it is not required for the Telegram torrent bot and must be explicitly enabled in Transmission before it is considered active.
-
-## Docker Compose requirements
-
-Active services:
+Active Compose services in the target deployment:
 
 - `transmission`
 - `jellyfin`
-- `dashboard`
-- `telegram-bot`
+- `media-app`
 
-The dashboard and bot build from the root `Dockerfile`. Both receive the necessary environment through `.env`; only the dashboard exposes a browser port. The bot exposes no port.
+`media-app` replaces the separate `dashboard` and `telegram-bot` containers. It:
 
-Remove inactive/obsolete Compose configuration and files for Glances, Prowlarr, Radarr, Sonarr, Homepage, and Home Assistant.
+- exposes the dashboard port;
+- receives application configuration from `.env`;
+- mounts `/media/usb:/data`;
+- reaches Transmission and Jellyfin by their Compose service names;
+- runs FastAPI and Telegram polling in one process.
 
 ## Configuration
 
-Required `.env` values:
+Required or feature-specific environment variables:
 
 ```dotenv
 TELEGRAM_BOT_TOKEN=
@@ -167,31 +202,33 @@ RUTRACKER_PASSWORD=
 USER_NAME=
 USER_PASS=
 TRANSMISSION_RPC_URL=http://transmission:9091/transmission/rpc
+JELLYFIN_URL=http://jellyfin:8096
+JELLYFIN_API_KEY=
 ```
 
-Existing Telegram notification values may remain if the post-download script is retained:
+`JELLYFIN_API_KEY` is created from Jellyfin's administrative API Keys screen. Secrets remain only in ignored `.env` files and must never be committed.
 
-```dotenv
-TELEGRAM_CHAT_ID=
-```
+Do not add provider selectors such as `DOWNLOAD_CLIENT=transmission` or `MEDIA_SERVER=jellyfin` until an alternative implementation exists.
 
-Secrets are stored only in ignored `.env`, never in source or Compose. RuTracker uses username/password login; manually captured session cookies are not part of this design.
+## Out of scope
 
-## Implementation plan
+- Automatic torrent selection or unattended downloading.
+- RSS/watchlist synchronization.
+- Radarr, Sonarr, Prowlarr, or similar automation stacks.
+- Persistent search, command, or conversion history.
+- Multiple application workers or replicas.
+- Internal HTTP communication between the two clients.
+- A generic plugin or dependency-injection framework.
+- Moving active torrent content without coordinating with the download client.
 
-1. Clean Compose and remove obsolete files/configuration.
-2. Move the root Python project from `app/` to the root and migrate reusable code into `src/services/`.
-3. Update the dashboard imports and retain its existing file, move, conversion, and torrent-search views.
-4. Add `aiogram` and implement the Telegram bot as a second interface.
-5. Add the `telegram-bot` Compose service and update `.env.example`.
-6. Build containers and manually test search, cancel, add, duplicate handling, and dashboard conversion.
+## Acceptance criteria for the next architecture increment
 
-## Acceptance criteria
-
-- `docker compose up -d --build` starts Transmission, Jellyfin, dashboard, and Telegram bot successfully.
-- An authorized user can send a movie title, select one of up to three eligible results, and see it in Transmission.
-- An unauthorized Telegram user cannot search or add torrents.
-- A result larger than 30 GiB or marked 4K/HDR is not offered.
-- Cancel does not add anything to Transmission.
-- The dashboard continues to browse, move, inspect, and manually convert media.
-- No active Compose configuration or repository files remain for removed services.
+- Compose starts Transmission, Jellyfin, and one media application container.
+- Dashboard and Telegram polling run concurrently in one application process.
+- Existing authorized Telegram search/add and dashboard workflows continue working.
+- Dashboard and bot call shared capability modules directly.
+- Both clients can display normalized download progress and ETA.
+- Both clients can browse library areas and move completed content safely.
+- Both clients can inspect audio codecs and identify DTS.
+- Both clients can request a Jellyfin refresh.
+- Conversion remains safe and only one conversion can run at a time.
