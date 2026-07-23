@@ -1,0 +1,8 @@
+.git
+.env
+.venv
+application-data
+homepage-config
+__pycache__
+*.py[cod]
+*.log

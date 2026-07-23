@@ -3,3 +3,6 @@
 application-data/
 
 *.log
+__pycache__/
+*.py[cod]
+.venv/

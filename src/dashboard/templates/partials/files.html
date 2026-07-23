@@ -1,0 +1,29 @@
+{% for item in items %}
+<div class="bg-gray-800 rounded-lg p-3 flex justify-between items-center">
+    <div class="flex-1 min-w-0 mr-4">
+        <div class="flex items-center gap-2">
+            {% if item.is_dir %}
+            <svg class="w-5 h-5 text-yellow-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/>
+            </svg>
+            {% else %}
+            <svg class="w-5 h-5 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/>
+            </svg>
+            {% endif %}
+            <span class="truncate">{{ item.name }}</span>
+        </div>
+        <div class="text-xs text-gray-500 ml-7">{{ item.size_human }}</div>
+    </div>
+    <button
+        onclick="openMoveModal('{{ item.path }}', '{{ item.name }}')"
+        class="bg-green-600 hover:bg-green-500 px-3 py-2 rounded text-sm font-medium"
+    >
+        Move
+    </button>
+</div>
+{% else %}
+<div class="text-center py-8 text-gray-500">
+    No files in downloads
+</div>
+{% endfor %}

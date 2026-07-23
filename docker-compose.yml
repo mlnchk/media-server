@@ -1,109 +1,61 @@
-version: "3.2"
 services:
   transmission:
     image: lscr.io/linuxserver/transmission:latest
     container_name: transmission
+    env_file: .env
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Asia/Bangkok
-      - USER=${USER_NAME}
-      - PASS=${USER_PASS}
+      PUID: 1000
+      PGID: 1000
+      TZ: Asia/Bangkok
+      USER: ${USER_NAME}
+      PASS: ${USER_PASS}
     volumes:
       - ./application-data/transmission:/config
+      - ./scripts:/scripts:ro
       - /media/usb/downloads:/data/downloads
+      - /media/usb/movies:/data/movies
+      - /media/usb/shows:/data/shows
     ports:
-      - 9091:9091
-      - 51413:51413
-      - 51413:51413/udp
-    restart: unless-stopped
-
-  prowlarr:
-    image: lscr.io/linuxserver/prowlarr:latest
-    container_name: prowlarr
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Asia/Bangkok
-    volumes:
-      - ./application-data/prowlarr:/config
-    ports:
-      - 9696:9696
-    restart: unless-stopped
-
-  radarr:
-    image: lscr.io/linuxserver/radarr:latest
-    container_name: radarr
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Asia/Bangkok
-    volumes:
-      - ./application-data/radarr:/config
-      - /media/usb:/data
-    ports:
-      - 7878:7878
-    restart: unless-stopped
-
-  sonarr:
-    image: lscr.io/linuxserver/sonarr:latest
-    container_name: sonarr
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Asia/Bangkok
-    volumes:
-      - ./application-data/sonarr:/config
-      - /media/usb:/data
-    ports:
-      - 8989:8989
+      - "9091:9091"
+      - "51413:51413"
+      - "51413:51413/udp"
     restart: unless-stopped
 
   jellyfin:
     image: lscr.io/linuxserver/jellyfin:latest
     container_name: jellyfin
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Asia/Bangkok
+      PUID: 1000
+      PGID: 1000
+      TZ: Asia/Bangkok
     volumes:
       - ./application-data/jellyfin:/config
       - /media/usb:/data
     ports:
-      - 8096:8096
-      - 8920:8920 #optional
-      - 7359:7359/udp #optional
-      - 1900:1900/udp #optional
+      - "8096:8096"
+      - "8920:8920"
+      - "7359:7359/udp"
+      - "1900:1900/udp"
     restart: unless-stopped
 
-  homepage:
-    image: ghcr.io/gethomepage/homepage:latest
-    container_name: homepage
-    environment:
-      HOMEPAGE_ALLOWED_HOSTS: pi.local:3000
-      PUID: 1000 # we need to use $PUID for docker sock access (root)
-      PGID: 1000 # we need to use $PGID for docker sock access (root)
-      HOMEPAGE_VAR_TRANSMISSION_USER: $USER_NAME
-      HOMEPAGE_VAR_TRANSMISSION_PASS: $USER_PASS
-    volumes:
-      - ./homepage-config:/app/config
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /media/usb:/data
+  dashboard:
+    build: .
+    container_name: dashboard
+    command: ["uvicorn", "dashboard.main:app", "--host", "0.0.0.0", "--port", "8080"]
+    env_file: .env
+    depends_on:
+      - transmission
     ports:
-      - 3000:3000
+      - "3000:8080"
+    volumes:
+      - /media/usb:/data
     restart: unless-stopped
 
-  spotify:
-    image: giof71/librespot:latest
-    container_name: spotify
-    network_mode: host               # required for Spotify Connect discovery
+  telegram-bot:
+    build: .
+    container_name: telegram-bot
+    command: ["python", "-m", "bot.main"]
+    env_file: .env
+    depends_on:
+      - transmission
     restart: unless-stopped
-    environment:
-      - BACKEND=pulseaudio           # use host PulseAudio (to your BT speaker)
-      - DEVICE_NAME=Pi               # how it shows up in Spotify
-      - BITRATE=320                  # 96/160/320
-      - INITIAL_VOLUME=70
-      - PUID=1000                    # match your user (likely 'pi')
-      - PGID=1000
-    volumes:
-      - /run/user/1000/pulse:/run/user/1000/pulse  # PulseAudio socket from host

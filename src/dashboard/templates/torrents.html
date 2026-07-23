@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}Torrents - Media Dashboard{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h2 class="text-lg font-semibold">Torrent Search</h2>
+    <p class="text-sm text-gray-400 mt-1">Eligible RuTracker results, ranked primarily by seeders.</p>
+</div>
+
+<div class="bg-gray-800 rounded-lg p-4 mb-4">
+    <form id="torrent-search-form" class="flex gap-2">
+        <input
+            id="torrent-query"
+            type="text"
+            placeholder="Search torrents..."
+            class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
+            required
+        >
+        <button type="submit" class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded font-medium">
+            Search
+        </button>
+    </form>
+    <div id="search-status" class="text-sm text-gray-400 mt-2"></div>
+</div>
+
+<div id="results" class="space-y-2"></div>
+
+<script>
+const form = document.getElementById('torrent-search-form');
+const queryInput = document.getElementById('torrent-query');
+const statusEl = document.getElementById('search-status');
+const resultsEl = document.getElementById('results');
+
+function escapeHtml(text) {
+  return String(text)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function renderResults(items) {
+  if (!items.length) {
+    resultsEl.innerHTML = '<div class="text-center py-8 text-gray-500">No results</div>';
+    return;
+  }
+
+  resultsEl.innerHTML = items.map(item => `
+    <div class="bg-gray-800 rounded-lg p-4">
+      <div class="flex flex-col gap-3">
+        <div class="min-w-0">
+          <div class="font-medium break-words leading-snug">${escapeHtml(item.title)}</div>
+          <div class="text-xs text-gray-400 mt-1">
+            📦 ${item.size_gb} GiB · 🌱 ${item.seeds} · leechers ${item.leeches}
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onclick="addToTransmission(${item.topic_id})"
+            class="bg-blue-600 hover:bg-blue-500 px-3 py-2 rounded text-sm font-medium"
+          >to transmission</button>
+          <a
+            href="/api/torrents/download/${item.topic_id}"
+            class="bg-green-600 hover:bg-green-500 px-3 py-2 rounded text-sm font-medium"
+          >.torrent</a>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function addToTransmission(topicId) {
+  statusEl.textContent = `adding ${topicId} to transmission...`;
+
+  try {
+    const res = await fetch(`/api/torrents/add/${topicId}`, { method: 'POST' });
+    const data = await res.json();
+
+    if (!res.ok) {
+      statusEl.textContent = data.detail || 'failed to add to transmission';
+      return;
+    }
+
+    statusEl.textContent = data.duplicate
+      ? `already in transmission: ${data.name || topicId}`
+      : `added to transmission: ${data.name || topicId}`;
+  } catch (err) {
+    statusEl.textContent = 'failed to add to transmission: network/server error';
+  }
+}
+
+async function runSearch(q, { updateUrl = true } = {}) {
+  const query = (q || '').trim();
+  if (!query) return;
+
+  if (updateUrl) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('q', query);
+    window.history.replaceState({}, '', url);
+  }
+
+  statusEl.textContent = `searching for "${query}"...`;
+  resultsEl.innerHTML = '';
+
+  try {
+    const res = await fetch(`/api/torrents/search?q=${encodeURIComponent(query)}`);
+    const data = await res.json();
+
+    if (!res.ok) {
+      statusEl.textContent = data.detail || 'search failed';
+      return;
+    }
+
+    statusEl.textContent = `found ${data.count} eligible results`;
+    renderResults(data.results || []);
+  } catch (err) {
+    statusEl.textContent = 'search failed: network/server error';
+  }
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  await runSearch(queryInput.value, { updateUrl: true });
+});
+
+// Restore query from URL on page open/reload.
+const initialQuery = new URLSearchParams(window.location.search).get('q');
+if (initialQuery) {
+  queryInput.value = initialQuery;
+  runSearch(initialQuery, { updateUrl: false });
+}
+</script>
+{% endblock %}
