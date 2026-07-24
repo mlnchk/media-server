@@ -16,8 +16,10 @@
             <h1 class="text-xl font-bold">Media Dashboard</h1>
             <div class="flex gap-4">
                 <a href="/" class="text-gray-300 hover:text-white {% if request.url.path == '/' %}text-white font-semibold{% endif %}">Files</a>
+                <a href="/downloads" class="text-gray-300 hover:text-white {% if request.url.path == '/downloads' %}text-white font-semibold{% endif %}">Downloads</a>
                 <a href="/convert" class="text-gray-300 hover:text-white {% if request.url.path == '/convert' %}text-white font-semibold{% endif %}">Convert</a>
                 <a href="/torrents" class="text-gray-300 hover:text-white {% if request.url.path == '/torrents' %}text-white font-semibold{% endif %}">Torrents</a>
+                <button id="refresh-library" class="text-gray-300 hover:text-white">Refresh Jellyfin</button>
             </div>
         </div>
     </nav>
@@ -25,5 +27,15 @@
     <main class="max-w-4xl mx-auto p-4">
         {% block content %}{% endblock %}
     </main>
+    <script>
+    document.getElementById('refresh-library').addEventListener('click', async function () {
+      this.disabled = true; this.textContent = 'Requesting…';
+      try {
+        const response = await fetch('/api/refresh', {method: 'POST'});
+        const data = await response.json();
+        alert(response.ok ? data.message : (data.detail || 'Refresh failed'));
+      } finally { this.disabled = false; this.textContent = 'Refresh Jellyfin'; }
+    });
+    </script>
 </body>
 </html>

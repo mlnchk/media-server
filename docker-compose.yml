@@ -38,24 +38,16 @@ services:
       - "1900:1900/udp"
     restart: unless-stopped
 
-  dashboard:
+  media-app:
     build: .
-    container_name: dashboard
-    command: ["uvicorn", "dashboard.main:app", "--host", "0.0.0.0", "--port", "8080"]
+    container_name: media-app
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]
     env_file: .env
     depends_on:
       - transmission
+      - jellyfin
     ports:
       - "3000:8080"
     volumes:
       - /media/usb:/data
-    restart: unless-stopped
-
-  telegram-bot:
-    build: .
-    container_name: telegram-bot
-    command: ["python", "-m", "bot.main"]
-    env_file: .env
-    depends_on:
-      - transmission
     restart: unless-stopped

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Downloads - Media Dashboard{% endblock %}
+{% block content %}
+<div class="flex justify-between items-center mb-4"><div><h2 class="text-lg font-semibold">Downloads</h2><p class="text-sm text-gray-400">Transmission status and progress</p></div><a href="/downloads" class="bg-gray-700 px-3 py-1 rounded">Refresh</a></div>
+{% if error %}<div class="bg-red-900 border border-red-700 rounded p-3 mb-3">{{ error }}</div>{% endif %}
+<div class="space-y-3">
+{% for item in downloads %}
+<div class="bg-gray-800 rounded p-4">
+ <div class="flex justify-between gap-2"><strong class="break-all">{{ item.name }}</strong><span class="text-gray-400">{{ item.status }}</span></div>
+ <div class="w-full bg-gray-700 rounded h-2 my-3"><div class="bg-blue-500 h-2 rounded" style="width: {{ item.percent_complete }}%"></div></div>
+ <div class="text-sm text-gray-300">{{ '%.1f'|format(item.percent_complete) }}% · {{ format_size(item.downloaded_bytes) }} / {{ format_size(item.total_bytes) }}</div>
+ <div class="text-xs text-gray-500 mt-1">Remaining {{ format_size(item.remaining_bytes) }} · {{ format_size(item.rate_bytes) }}/s · ETA {{ format_eta(item.eta_seconds) }}</div>
+</div>
+{% else %}{% if not error %}<div class="text-center py-8 text-gray-500">No downloads</div>{% endif %}{% endfor %}
+</div>
+{% endblock %}

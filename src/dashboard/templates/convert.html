@@ -52,11 +52,10 @@
             <div class="flex items-center gap-3 text-sm">
                 <input
                     type="checkbox"
-                    name="track-{{ file.path }}"
                     value="{{ track.index }}"
                     {% if track.is_dts %}checked{% endif %}
                     class="rounded bg-gray-700 border-gray-600"
-                    data-file="{{ file.path }}"
+                    data-file="{{ file.area }}:{{ file.relative_path }}"
                 >
                 <span class="{% if track.is_dts %}text-orange-400{% else %}text-gray-400{% endif %}">
                     Track {{ track.index }}:
@@ -70,7 +69,7 @@
 
         {% if file.has_dts and not status.running %}
         <button
-            onclick="startConversion('{{ file.path }}')"
+            onclick='startConversion({{ file.area|tojson }}, {{ file.relative_path|tojson }})'
             class="w-full bg-blue-600 hover:bg-blue-500 py-2 rounded font-medium"
         >
             Convert to AC3
@@ -89,8 +88,8 @@
 </div>
 
 <script>
-async function startConversion(filePath) {
-    const checkboxes = document.querySelectorAll(`input[data-file="${filePath}"]:checked`);
+async function startConversion(area, filePath) {
+    const checkboxes = document.querySelectorAll(`input[data-file="${CSS.escape(area + ':' + filePath)}"]:checked`);
     const tracks = Array.from(checkboxes).map(cb => cb.value);
 
     if (tracks.length === 0) {
@@ -99,6 +98,7 @@ async function startConversion(filePath) {
     }
 
     const formData = new FormData();
+    formData.append('area', area);
     formData.append('path', filePath);
     tracks.forEach(t => formData.append('tracks', t));
 

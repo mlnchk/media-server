@@ -86,19 +86,29 @@ def scan_for_dts(directory: Path) -> list[MediaFile]:
     return found
 
 
-async def convert_audio(file_path: Path, track_indices: list[int]) -> bool:
-    """Convert selected DTS streams, replacing the source only after ffmpeg succeeds."""
+def start_audio_conversion(file_path: Path, track_indices: list[int]) -> asyncio.Task[bool] | None:
+    """Atomically reserve the single conversion slot and start conversion."""
     if conversion_status.running:
-        return False
-    source = file_path.resolve()
-    output = source.with_name(f".{source.stem}.converting{source.suffix}")
+        return None
     conversion_status.running = True
-    conversion_status.current_file = source.name
+    conversion_status.current_file = file_path.name
     conversion_status.progress = "Starting..."
     conversion_status.error = None
+    return asyncio.create_task(_perform_conversion(file_path, track_indices))
+
+
+async def convert_audio(file_path: Path, track_indices: list[int]) -> bool:
+    """Convert now when the shared conversion slot is available."""
+    task = start_audio_conversion(file_path, track_indices)
+    return False if task is None else await task
+
+
+async def _perform_conversion(file_path: Path, track_indices: list[int]) -> bool:
+    source = file_path.resolve()
+    output = source.with_name(f".{source.stem}.converting{source.suffix}")
     process: asyncio.subprocess.Process | None = None
     try:
-        tracks = get_audio_tracks(source)
+        tracks = await asyncio.to_thread(get_audio_tracks, source)
         selected = set(track_indices)
         valid = {track.index for track in tracks if track.is_dts}
         if not selected or not selected <= valid:

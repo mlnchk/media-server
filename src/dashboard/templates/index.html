@@ -1,130 +1,54 @@
 {% extends "base.html" %}
-
-{% block title %}Files - Media Dashboard{% endblock %}
-
+{% block title %}Library - Media Dashboard{% endblock %}
 {% block content %}
-<div class="mb-4 flex justify-between items-center">
-    <h2 class="text-lg font-semibold">Downloads</h2>
-    <button
-        hx-get="/partials/files"
-        hx-target="#file-list"
-        hx-swap="innerHTML"
-        class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-sm"
-    >
-        Refresh
-    </button>
-</div>
-
-<div id="file-list" class="space-y-2">
-    {% for item in items %}
-    <div class="bg-gray-800 rounded-lg p-3 flex justify-between items-center">
-        <div class="flex-1 min-w-0 mr-4">
-            <div class="flex items-center gap-2">
-                {% if item.is_dir %}
-                <svg class="w-5 h-5 text-yellow-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/>
-                </svg>
-                {% else %}
-                <svg class="w-5 h-5 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/>
-                </svg>
-                {% endif %}
-                <span class="truncate">{{ item.name }}</span>
-            </div>
-            <div class="text-xs text-gray-500 ml-7">{{ item.size_human }}</div>
-        </div>
-        <button
-            onclick="openMoveModal('{{ item.path }}', '{{ item.name }}')"
-            class="bg-green-600 hover:bg-green-500 px-3 py-2 rounded text-sm font-medium"
-        >
-            Move
-        </button>
+<div class="mb-4 flex flex-wrap justify-between items-center gap-2">
+  <div>
+    <h2 class="text-lg font-semibold">Library: {{ area|title }}{% if path %} / {{ path }}{% endif %}</h2>
+    <div class="flex gap-3 text-sm mt-1">
+      {% for name in areas %}<a class="{% if name == area %}text-blue-400{% else %}text-gray-400{% endif %}" href="/?area={{ name }}">{{ name|title }}</a>{% endfor %}
+      {% if parent is not none %}<a class="text-gray-400" href="/?area={{ area }}&path={{ parent|urlencode }}">⬆ Up</a>{% endif %}
     </div>
-    {% else %}
-    <div class="text-center py-8 text-gray-500">
-        No files in downloads
-    </div>
-    {% endfor %}
+  </div>
+  <button onclick="refreshFiles()" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-sm">Refresh</button>
 </div>
+<div id="notice" class="hidden mb-3 rounded p-3"></div>
+<div id="file-list" class="space-y-2">{% include "partials/files.html" %}</div>
 
-<!-- Move Modal -->
 <div id="move-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-50">
-    <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md">
-        <h3 class="text-lg font-semibold mb-4">Move to Library</h3>
-        <form id="move-form" hx-post="/api/move" hx-swap="none">
-            <input type="hidden" name="path" id="move-path">
-
-            <div class="mb-4">
-                <label class="block text-sm text-gray-400 mb-1">Name</label>
-                <input
-                    type="text"
-                    name="new_name"
-                    id="move-name"
-                    class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
-                >
-            </div>
-
-            <div class="mb-6">
-                <label class="block text-sm text-gray-400 mb-2">Destination</label>
-                <div class="flex gap-4">
-                    <label class="flex-1">
-                        <input type="radio" name="destination" value="movies" checked class="sr-only peer">
-                        <div class="bg-gray-700 peer-checked:bg-blue-600 peer-checked:border-blue-500 border border-gray-600 rounded-lg p-3 text-center cursor-pointer hover:bg-gray-600">
-                            Movies
-                        </div>
-                    </label>
-                    <label class="flex-1">
-                        <input type="radio" name="destination" value="shows" class="sr-only peer">
-                        <div class="bg-gray-700 peer-checked:bg-blue-600 peer-checked:border-blue-500 border border-gray-600 rounded-lg p-3 text-center cursor-pointer hover:bg-gray-600">
-                            Shows
-                        </div>
-                    </label>
-                </div>
-            </div>
-
-            <div class="flex gap-3">
-                <button
-                    type="button"
-                    onclick="closeMoveModal()"
-                    class="flex-1 bg-gray-700 hover:bg-gray-600 py-2 rounded"
-                >
-                    Cancel
-                </button>
-                <button
-                    type="submit"
-                    class="flex-1 bg-green-600 hover:bg-green-500 py-2 rounded font-medium"
-                >
-                    Move
-                </button>
-            </div>
-        </form>
-    </div>
+ <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md">
+  <h3 class="text-lg font-semibold mb-4">Move item</h3>
+  <form id="move-form">
+   <input type="hidden" name="source_area" id="move-area"><input type="hidden" name="source_path" id="move-path">
+   <label class="block text-sm mb-1">Name</label><input class="w-full bg-gray-700 rounded px-3 py-2 mb-3" name="new_name" id="move-name">
+   <label class="block text-sm mb-1">Destination area</label>
+   <select class="w-full bg-gray-700 rounded px-3 py-2 mb-3" name="destination_area">{% for name in areas %}<option value="{{ name }}">{{ name|title }}</option>{% endfor %}</select>
+   <label class="block text-sm mb-1">Destination folder (relative, optional)</label><input class="w-full bg-gray-700 rounded px-3 py-2 mb-3" name="destination_path">
+   <label class="flex items-center gap-2 text-sm mb-4"><input type="checkbox" name="refresh_after" value="true">Request Jellyfin refresh afterward</label>
+   <div class="flex gap-2"><button type="button" onclick="closeModal('move-modal')" class="flex-1 bg-gray-700 py-2 rounded">Cancel</button><button class="flex-1 bg-green-600 py-2 rounded">Confirm move</button></div>
+  </form>
+ </div>
 </div>
-
+<div id="rename-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-50">
+ <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md">
+  <h3 class="text-lg font-semibold mb-4">Rename item</h3>
+  <form id="rename-form">
+   <input type="hidden" name="area" id="rename-area"><input type="hidden" name="path" id="rename-path">
+   <input class="w-full bg-gray-700 rounded px-3 py-2 mb-4" name="new_name" id="rename-name">
+   <div class="flex gap-2"><button type="button" onclick="closeModal('rename-modal')" class="flex-1 bg-gray-700 py-2 rounded">Cancel</button><button class="flex-1 bg-blue-600 py-2 rounded">Confirm rename</button></div>
+  </form>
+ </div>
+</div>
 <script>
-function openMoveModal(path, name) {
-    document.getElementById('move-path').value = path;
-    document.getElementById('move-name').value = name;
-    document.getElementById('move-modal').classList.remove('hidden');
-    document.getElementById('move-modal').classList.add('flex');
-}
-
-function closeMoveModal() {
-    document.getElementById('move-modal').classList.add('hidden');
-    document.getElementById('move-modal').classList.remove('flex');
-}
-
-// Close on backdrop click
-document.getElementById('move-modal').addEventListener('click', function(e) {
-    if (e.target === this) closeMoveModal();
-});
-
-// Handle form success
-document.body.addEventListener('htmx:afterRequest', function(e) {
-    if (e.detail.elt.id === 'move-form' && e.detail.successful) {
-        closeMoveModal();
-        htmx.ajax('GET', '/partials/files', {target: '#file-list', swap: 'innerHTML'});
-    }
-});
+const area={{ area|tojson }}, currentPath={{ path|tojson }};
+function modal(id, show){const el=document.getElementById(id);el.classList.toggle('hidden',!show);el.classList.toggle('flex',show)}
+function closeModal(id){modal(id,false)}
+function openMoveModal(a,p,n){document.getElementById('move-area').value=a;document.getElementById('move-path').value=p;document.getElementById('move-name').value=n;modal('move-modal',true)}
+function openRenameModal(a,p,n){document.getElementById('rename-area').value=a;document.getElementById('rename-path').value=p;document.getElementById('rename-name').value=n;modal('rename-modal',true)}
+function notice(text,error=false){const el=document.getElementById('notice');el.textContent=text;el.className=`mb-3 rounded p-3 ${error?'bg-red-900':'bg-green-900'}`}
+async function submitForm(event,url,modalId){event.preventDefault();const res=await fetch(url,{method:'POST',body:new FormData(event.target)});const data=await res.json();if(!res.ok){notice(data.detail||'Operation failed',true);return}closeModal(modalId);notice(data.message||'Operation completed',Boolean(data.refresh_failed));refreshFiles()}
+document.getElementById('move-form').addEventListener('submit',e=>submitForm(e,'/api/move','move-modal'));
+document.getElementById('rename-form').addEventListener('submit',e=>submitForm(e,'/api/rename','rename-modal'));
+function refreshFiles(){fetch(`/partials/files?area=${encodeURIComponent(area)}&path=${encodeURIComponent(currentPath)}`).then(r=>r.text()).then(t=>document.getElementById('file-list').innerHTML=t)}
+async function inspectAudio(a,p){const res=await fetch(`/api/audio?area=${encodeURIComponent(a)}&path=${encodeURIComponent(p)}`);const data=await res.json();if(!res.ok){notice(data.detail||'Inspection failed',true);return}const tracks=data.tracks||[];notice(tracks.length?tracks.map(t=>`Track ${t.index}: ${t.codec.toUpperCase()} ${t.channels}ch${t.is_dts?' — DTS':''}`).join('\n'):'No audio tracks found')}
 </script>
 {% endblock %}

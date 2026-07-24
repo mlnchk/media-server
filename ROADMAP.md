@@ -12,43 +12,43 @@ The target behavior and architecture are defined in [`SPEC.md`](SPEC.md). Implem
 
 ## Phase 1: Simplify the runtime
 
-- [ ] Replace the dashboard and Telegram containers with one `media-app` service
-- [ ] Start aiogram polling from the FastAPI lifespan
-- [ ] Guarantee a single Uvicorn worker and clean bot shutdown
-- [ ] Keep Telegram failures from unnecessarily stopping the dashboard
-- [ ] Move blocking calls off the shared asyncio event loop
+- [x] Replace the dashboard and Telegram containers with one `media-app` service
+- [x] Start aiogram polling from the FastAPI lifespan
+- [x] Guarantee a single Uvicorn worker and clean bot shutdown
+- [x] Keep Telegram failures from unnecessarily stopping the dashboard
+- [x] Move blocking calls off the shared asyncio event loop
 
 ## Phase 2: Cement capability boundaries
 
-- [ ] Rename/split current modules into `torrent_indexer.py` and `download_client.py`
-- [ ] Keep RuTracker and Transmission as direct default implementations; add no DI framework
-- [ ] Extract path validation, listing, rename, and move logic into `services/library.py`
-- [ ] Add `services/media_server.py` with direct Jellyfin refresh support
-- [ ] Use provider-neutral result models and errors at client boundaries
+- [x] Rename/split current modules into `torrent_indexer.py` and `download_client.py`
+- [x] Keep RuTracker and Transmission as direct default implementations; add no DI framework
+- [x] Extract path validation, listing, rename, and move logic into `services/library.py`
+- [x] Add `services/media_server.py` with direct Jellyfin refresh support
+- [x] Use provider-neutral result models and errors at client boundaries
 
 ## Phase 3: Download visibility
 
-- [ ] Normalize Transmission status, downloaded bytes, total bytes, remaining bytes, rate, and ETA
-- [ ] Add download status to the dashboard
-- [ ] Add Telegram `/downloads` with refresh controls
-- [ ] Handle stopped, completed, and unknown-ETA states clearly
+- [x] Normalize Transmission status, downloaded bytes, total bytes, remaining bytes, rate, and ETA
+- [x] Add download status to the dashboard
+- [x] Add Telegram `/downloads` with refresh controls
+- [x] Handle stopped, completed, and unknown-ETA states clearly
 
 ## Phase 4: Shared library interaction
 
-- [ ] Browse Downloads, Movies, and Shows through the shared library service
-- [ ] Add Telegram `/library` navigation with short-lived callback tokens
-- [ ] Support safe file and directory moves with confirmation
-- [ ] Prevent path traversal and destination overwrites
-- [ ] Prevent unsafe moves of active torrent content
-- [ ] Make the existing dashboard routes use the same operations
+- [x] Browse Downloads, Movies, and Shows through the shared library service
+- [x] Add Telegram `/library` navigation with short-lived callback tokens
+- [x] Support safe file and directory moves with confirmation
+- [x] Prevent path traversal and destination overwrites
+- [x] Prevent unsafe moves of active torrent content
+- [x] Make the existing dashboard routes use the same operations
 
 ## Phase 5: Media and Jellyfin controls
 
-- [ ] Show audio codecs and DTS status for a selected item in Telegram
-- [ ] Add manual Jellyfin refresh to dashboard and Telegram
-- [ ] Report partial success when a move succeeds but refresh fails
-- [ ] Consider optional automatic Jellyfin refresh after successful moves
-- [ ] Expose manual conversion through Telegram using the shared single-process conversion state
+- [x] Show audio codecs and DTS status for a selected item in Telegram
+- [x] Add manual Jellyfin refresh to dashboard and Telegram
+- [x] Report partial success when a move succeeds but refresh fails
+- [x] Consider optional automatic Jellyfin refresh after successful moves (kept manual)
+- [x] Expose manual conversion through Telegram using the shared single-process conversion state
 
 ## Later, only when justified
 
